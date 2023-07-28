@@ -3,7 +3,7 @@ library(stringr)
 library(readr)
 
 #read gene file
-file_path <- "\home\abirami\Downloads\task\hiring_task\Homo_sapiens.gene_info.gz"
+file_path <- "Homo_sapiens.gene_info.gz"
 
 data <- read_tsv(gzfile(file_path))
 cols_to_drop <- c("#tax_id", "LocusTag", "dbXrefs", "chromosome", "map_location", "description", 
@@ -70,7 +70,7 @@ print_all_gene_sets <- function(gene_sets) {
 }
 
 # Use the function
-file_path <- "\home\abirami\Downloads\task\hiring_task\h.all.v2023.1.Hs.symbols.gmt"
+file_path <- "h.all.v2023.1.Hs.symbols.gmt"
 gene_sets <- read_gmt(file_path)
 
 # Check if there are any gene sets
@@ -81,3 +81,79 @@ if (length(gene_sets) == 0) {
   # Print all gene sets
   print_all_gene_sets(gene_sets)
 }
+
+symbol_to_id <- exploded_data %>%
+  select(Symbol, GeneID) %>%
+  deframe()
+
+# Split synonyms and create a mapping
+exploded_data <- exploded_data %>%
+  mutate(Synonyms = str_split(Synonyms, pattern = "\\|")) %>%
+  unnest(Synonyms)
+
+synonyms_to_id <- exploded_data %>%
+  select(Synonyms, GeneID) %>%
+  deframe()
+
+# Function to read the gmt file and replace the gene names with IDs
+read_gmt <- function(file_path, symbol_to_id, synonyms_to_id) {
+  lines <- readLines(file_path)
+  
+  gene_sets <- map(lines, function(line) {
+    parts <- str_split(line, "\t")[[1]]
+    
+    gene_set_name <- parts[1]
+    description <- parts[2]
+    genes <- parts[3:length(parts)]
+    
+    # If description is present in genes, remove it
+    if (description %in% genes) {
+      genes <- setdiff(genes, description)
+      description <- NULL
+    }
+    
+    # Replace the gene names with their IDs
+    genes <- map_chr(genes, function(gene) {
+      if (gene %in% names(symbol_to_id)) {
+        as.character(symbol_to_id[[gene]])
+      } else if (gene %in% names(synonyms_to_id)) {
+        as.character(synonyms_to_id[[gene]])
+      } else {
+        NA_character_
+      }
+    })
+    
+    list(gene_set_name = gene_set_name, description = description, genes = genes)
+  })
+  
+  gene_sets
+}
+
+# Function to print all gene sets
+print_all_gene_sets <- function(gene_sets) {
+  for (gene_set in gene_sets) {
+    cat(paste("Gene Set: ", gene_set$gene_set_name, "\n"))
+    cat(paste("Description: ", gene_set$description, "\n"))
+    cat(paste("Genes: ", paste(gene_set$genes, collapse = ", "), "\n\n"))
+  }
+}
+
+# Function to write the gene sets to a .gmt file
+write_gmt <- function(gene_sets, file_name) {
+  file_conn <- file(file_name, "w")
+  for (gene_set in gene_sets) {
+    lines <- c(paste("Gene Set: ", gene_set$gene_set_name), 
+               paste("Description: ", gene_set$description), 
+               paste("Genes: ", paste(gene_set$genes, collapse = ", ")))
+    writeLines(lines, file_conn)
+    writeLines("", file_conn) # add a newline after each gene set
+  }
+  close(file_conn)
+}
+
+# Use the function
+gene_sets <- read_gmt("h.all.v2023.1.Hs.symbols.gmt", symbol_to_id, synonyms_to_id)
+
+# Print all gene sets
+print_all_gene_sets(gene_sets)
+
