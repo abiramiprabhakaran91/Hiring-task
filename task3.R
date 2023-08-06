@@ -3,7 +3,7 @@ library(dplyr)
 library(ggplot2)
 
 # Read the tab-separated file
-data <- read.delim("Homo_sapiens.gene_info", sep="\t")
+data <- read.delim(gzfile("Homo_sapiens.gene_info.gz"), sep="\t")
 column_name <- "chromosome"
 
 item_counts <- data %>%
